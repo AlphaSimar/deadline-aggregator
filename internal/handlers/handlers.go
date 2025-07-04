@@ -12,6 +12,8 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	googleapi "google.golang.org/api/oauth2/v2"
+	classroomapi "deadline-aggregator/internal/google"
+	"deadline-aggregator/internal/store"
 )
 
 var (
@@ -81,13 +83,43 @@ func handleGoogleCallback(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	// Store user in DB (or just print for now)
-	log.Printf("User: %s, Email: %s, ID: %s", user.Name, user.Email, user.Id)
+	err = store.SaveUserToken(db, user.Id, user.Email, user.Name, token)
+	if err != nil {
+		log.Printf("Failed to save user token: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save user data"})
+		return
+	}
 
-	// You can persist user here, then redirect or return success
+	log.Printf("User authenticated: %s, Email: %s, ID: %s", user.Name, user.Email, user.Id)
+
+	assignments, err := classroomapi.FetchAssignments(token, oauthConfig)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch assignments"})
+		return
+	}
+
+	type SimpleAssignment struct {
+		Title    string `json:"title"`
+		DueDate  string `json:"due_date"`
+		CourseId string `json:"course_id"`
+	}
+
+	var response []SimpleAssignment
+	for _, a := range assignments {
+		dueStr := fmt.Sprintf("%d-%02d-%02d %02d:%02d",
+			a.DueDate.Year, a.DueDate.Month, a.DueDate.Day,
+			a.DueTime.Hours, a.DueTime.Minutes)
+		response = append(response, SimpleAssignment{
+			Title:    a.Title,
+			DueDate:  dueStr,
+			CourseId: a.CourseId,
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Login successful!",
 		"name":    user.Name,
 		"email":   user.Email,
+		"assignments": response,
 	})
 }

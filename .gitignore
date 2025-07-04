@@ -1,0 +1,18 @@
+# Binaries
+/main.exe
+
+# Local environment overrides
+.env
+
+# IDE / editor configs
+.vscode/
+.idea/
+*.swp
+
+# Go build cache
+bin/
+**/*.test
+
+# OS files
+.DS_Store
+Thumbs.db 
